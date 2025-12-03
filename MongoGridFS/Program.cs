@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Configuration;
+﻿using Microsoft.AspNetCore.StaticFiles;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using MongoDB.Bson;
 using MongoDB.Driver;
@@ -27,14 +28,28 @@ var mongoClient = new MongoClient(settings);
 var mongoDatabase = mongoClient.GetDatabase(database);
 var gridFS = new GridFSBucket(mongoDatabase);
 
-var filePath = "test_file.txt";
+var fileName = "test_file.txt";
 
 ObjectId id;
 
-using (var stream = File.OpenRead(filePath))
+var provider = new FileExtensionContentTypeProvider();
+provider.Mappings[".csv"] = "text/csv";
+provider.Mappings[".zip"] = "application/zip";
+provider.TryGetContentType(fileName, out var contentType);
+
+using (var stream = File.OpenRead(fileName))
 {
-        id = await gridFS.UploadFromStreamAsync(Path.GetFileName(filePath), stream);
-        Console.WriteLine($"File uploaded with id: {id}");
+    id = await gridFS.UploadFromStreamAsync(
+        Path.GetFileName(fileName), 
+        stream,
+        new GridFSUploadOptions
+        {
+            Metadata = new BsonDocument
+            {
+                { "contentType", contentType }
+            }
+        });
+    Console.WriteLine($"File uploaded with id: {id}");
 }
 
 await gridFS.DownloadToStreamAsync(id, File.OpenWrite("downloaded_test_file.txt"));
